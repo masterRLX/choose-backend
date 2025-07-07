@@ -22,12 +22,12 @@ const RETRY_DELAY_MULTIPLIER = 2000; // 재시도 딜레이 증가량 (2초 * �
 const shuffleArray = (array) => { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } return array; };
 
 // 서버도 emojiPaintingMap 정보가 필요하므로 여기에 직접 정의합니다.
-// ✨ 😊 이모지의 키워드를 다시 한번 대폭 완화했습니다. ✨
+// ✨ 🤩 이모지의 키워드를 다시 한번 대폭 완화했습니다. ✨
 const emojiPaintingMap = {
     '😌': { keywordGroups: [['portraits', 'landscapes', 'still life', 'serene']], title: '모나리자 - 레오나르도 다빈치' },
-    '🤩': { keywordGroups: [['mythological', 'triumph', 'angels', 'cathedral', 'gold']], title: '아담의 창조 - 미켈란젤로' },
+    '🤩': { keywordGroups: [['art', 'painting', 'masterpiece', 'figure', 'scene', 'portrait', 'collection', 'museum', 'divine', 'beauty', 'grand']], title: '아담의 창조 - 미켈란젤로' }, // ✨ 키워드 대폭 완화 ✨
     '😂': { keywordGroups: [['celebration', 'dance', 'children', 'festival', 'playful']], title: '진주 귀고리를 한 소녀 - 요하네스 베르메르' },
-    '😊': { keywordGroups: [['art', 'painting', 'masterpiece', 'figure', 'scene', 'portrait', 'collection', 'museum', 'happy', 'human']], title: '자화상 - 빈센트 반 고흐' }, // ✨ 키워드 대폭 완화 ✨
+    '😊': { keywordGroups: [['art', 'painting', 'masterpiece', 'figure', 'scene', 'portrait', 'collection', 'museum', 'happy', 'human']], title: '자화상 - 빈센트 반 고흐' },
     '😎': { keywordGroups: [['portraits', 'fashion', 'elegant', 'cityscape', 'modern art']], title: '그랑드 자트 섬의 일요일 오후 - 조르주 쇠라' },
     '😁': { keywordGroups: [['music', 'dance', 'party', 'laughing', 'vibrant']], title: '물랭 드 라 갈레트의 무도회 - 피에르 오귀스트 르누아르' },
     '🥰': { keywordGroups: [['love', 'couple', 'embrace', 'venus', 'mother and child']], title: '키스 - 구스타프 클림트' },
