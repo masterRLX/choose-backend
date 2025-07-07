@@ -22,20 +22,20 @@ const RETRY_DELAY_MULTIPLIER = 2000; // 재시도 딜레이 증가량 (2초 * �
 const shuffleArray = (array) => { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } return array; };
 
 // 서버도 emojiPaintingMap 정보가 필요하므로 여기에 직접 정의합니다.
-// ✨ 🥳 와 🥶 이모지의 키워드를 변경했습니다. ✨
+// ✨ 😊 이모지의 키워드를 다시 한번 대폭 완화했습니다. ✨
 const emojiPaintingMap = {
     '😌': { keywordGroups: [['portraits', 'landscapes', 'still life', 'serene']], title: '모나리자 - 레오나르도 다빈치' },
     '🤩': { keywordGroups: [['mythological', 'triumph', 'angels', 'cathedral', 'gold']], title: '아담의 창조 - 미켈란젤로' },
     '😂': { keywordGroups: [['celebration', 'dance', 'children', 'festival', 'playful']], title: '진주 귀고리를 한 소녀 - 요하네스 베르메르' },
-    '😊': { keywordGroups: [['portraits', 'smile', 'mother', 'child', 'flowers']], title: '자화상 - 빈센트 반 고흐' },
+    '😊': { keywordGroups: [['art', 'painting', 'masterpiece', 'figure', 'scene', 'portrait', 'collection', 'museum', 'happy', 'human']], title: '자화상 - 빈센트 반 고흐' }, // ✨ 키워드 대폭 완화 ✨
     '😎': { keywordGroups: [['portraits', 'fashion', 'elegant', 'cityscape', 'modern art']], title: '그랑드 자트 섬의 일요일 오후 - 조르주 쇠라' },
     '😁': { keywordGroups: [['music', 'dance', 'party', 'laughing', 'vibrant']], title: '물랭 드 라 갈레트의 무도회 - 피에르 오귀스트 르누아르' },
     '🥰': { keywordGroups: [['love', 'couple', 'embrace', 'venus', 'mother and child']], title: '키스 - 구스타프 클림트' },
-    '🥳': { keywordGroups: [['joy', 'happiness', 'celebration', 'excitement', 'singing', 'music', 'dance']], title: '라스 메니나스 - 디에고 벨라스케스' }, // ✨ 키워드 변경 ✨
+    '🥳': { keywordGroups: [['joy', 'happiness', 'celebration', 'excitement', 'singing', 'music', 'dance']], title: '라스 메니나스 - 디에고 벨라스케스' },
     '😴': { keywordGroups: [['night', 'landscapes', 'moon', 'dream', 'stillness']], title: '별이 빛나는 밤 - 빈센트 반 고흐' },
     '🤯': { keywordGroups: [['abstract art', 'surrealism', 'cubism', 'geometry']], title: '절규 - 에드바르 뭉크' },
     '😡': { keywordGroups: ['serene landscapes', 'still life with flowers', 'madonna and child', 'peace'], title: '1808년 5월 3일 - 프란시스코 고야' },
-    '🥶': { keywordGroups: [['comfort', 'warmth', 'sun', 'light', 'god', 'guardian', 'male', 'healing', 'solace']], title: '안개 바다 위의 방랑자 - 카스파르 다비트 프리드리히' }, // ✨ 키워드 변경 ✨
+    '🥶': { keywordGroups: [['art', 'painting', 'masterpiece', 'figure', 'scene', 'portrait', 'collection', 'museum', 'cold', 'winter']], title: '안개 바다 위의 방랑자 - 카스파르 다비트 프리드리히' },
     '🥺': { keywordGroups: ['hope', 'light', 'angels', 'saints', 'charity', 'sunrise'], title: '비너스의 탄생 - 산드로 보티첼리' },
     '🤔': { keywordGroups: ['sculpture', 'philosophy', 'manuscripts', 'maps', 'self-portraits'], title: '생각하는 사람 - 오귀스트 로댕' },
     '🤫': { keywordGroups: ['interiors', 'letters', 'window', 'symbols', 'allegory', 'secret'], title: '아메리칸 고딕 - 그랜트 우드' },
@@ -149,7 +149,7 @@ app.get('/api/painting', async (req, res) => {
 
     try {
         const paintingData = emojiPaintingMap[emoji];
-        if (!paintingData || !paintingData.keywordGroups || !Array.isArray(paintingData.keywordGroups)) { // 추가 방어 로직
+        if (!paintingData || !paintingData.keywordGroups || !Array.isArray(paintingData.keywordGroups)) {
             console.error(`Invalid or malformed emoji data for: ${emoji}`);
             return res.status(400).json({ error: 'Invalid or malformed emoji data provided.' });
         }
