@@ -10,9 +10,11 @@ app.use(express.json());
 const MET_API_BASE_URL = 'https://collectionapi.metmuseum.org/public/collection/v1';
 const BATCH_SIZE = 5;
 const cache = new Map();
+// 404 등으로 실패한 objectID를 기억하여 다시 요청하지 않도록 하는 Set (새로운 기능)
+const failedObjectIDs = new Set(); 
 
 // --- Rate Limit 회피 및 안정성 강화를 위한 상수 ---
-const API_REQUEST_DELAY_MS = 500; // API 요청 간 최소 딜레이 (0.5초)
+const API_REQUEST_DELAY_MS = 600; // API 요청 간 최소 딜레이 (0.6초로 약간 증가)
 const MAX_SEARCH_RETRIES = 3;     // 검색 실패 시 최대 재시도 횟수
 const MAX_DETAIL_RETRIES = 5;     // 상세 정보 실패 시 최대 재시도 횟수
 const RETRY_DELAY_MULTIPLIER = 1000; // 재시도 딜레이 증가량 (1초 * 시도 횟수)
@@ -21,7 +23,6 @@ const RETRY_DELAY_MULTIPLIER = 1000; // 재시도 딜레이 증가량 (1초 * �
 const shuffleArray = (array) => { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } return array; };
 
 // 서버도 emojiPaintingMap 정보가 필요하므로 여기에 직접 정의합니다.
-// 이모지 키워드 그룹은 2차원 배열로 정의되어 있습니다.
 const emojiPaintingMap = {
     '😌': { keywordGroups: [['portraits', 'landscapes', 'still life', 'serene']], title: '모나리자 - 레오나르도 다빈치' },
     '🤩': { keywordGroups: [['mythological', 'triumph', 'angels', 'cathedral', 'gold']], title: '아담의 창조 - 미켈란젤로' },
@@ -55,7 +56,11 @@ const fetchPaintingsInBackground = async (emoji) => {
         
         while (newFoundPaintings.length < targetFetchCount && currentIndex < emojiCache.objectIDs.length) {
             const objectID = emojiCache.objectIDs[currentIndex++];
-            if (!objectID) continue;
+            // 이미 실패한 ID는 건너뜁니다.
+            if (!objectID || failedObjectIDs.has(objectID)) { 
+                // console.log(`Skipping failed or invalid objectID: ${objectID}`); // 디버깅용
+                continue; 
+            }
 
             for (let i = 0; i < MAX_DETAIL_RETRIES; i++) {
                 try {
@@ -72,11 +77,19 @@ const fetchPaintingsInBackground = async (emoji) => {
                             objectURL: detailResponse.data.objectURL || '#'
                         });
                         break;
+                    } else {
+                        // 이미지가 없는 경우도 실패로 간주하고 failedObjectIDs에 추가
+                        console.warn(`[BG Detail Skip] Object ID ${objectID}: No primary image.`);
+                        failedObjectIDs.add(objectID);
+                        break; // 이미지가 없으면 재시도해도 소용없으니 탈출
                     }
                 } catch (e) {
-                    console.warn(`[BG Detail Error] Object ID ${objectID} (Attempt ${i + 1}/${MAX_DETAIL_RETRIES}): ${e.message}`);
-                    if (e.response && e.response.status === 403) {
-                         console.error(`[BG Detail Error] 403 Forbidden for ${objectID}. Aborting retries for this ID.`);
+                    const status = e.response ? e.response.status : 'N/A';
+                    console.warn(`[BG Detail Error] Object ID ${objectID} (Attempt ${i + 1}/${MAX_DETAIL_RETRIES}, Status: ${status}): ${e.message}`);
+                    if (status === 403 || status === 404 || i === MAX_DETAIL_RETRIES - 1) {
+                         // 403, 404는 재시도 무의미, 또는 마지막 시도 실패 시
+                         console.error(`[BG Detail Error] Aborting retries for ${objectID} due to status ${status} or max retries.`);
+                         failedObjectIDs.add(objectID); // 실패한 ID 기록
                          break;
                     }
                     await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MULTIPLIER * (i + 1)));
@@ -108,7 +121,7 @@ app.get('/api/painting', async (req, res) => {
             fetchPaintingsInBackground(emoji);
             return;
         }
-        if (!emojiCache.isFetching) {
+        if (!emojiCache.isFetching) { 
             console.log(`[Cache Miss] Starting background fetch for ${emoji}`);
             await fetchPaintingsInBackground(emoji);
             const updatedCache = cache.get(emoji);
@@ -134,13 +147,9 @@ app.get('/api/painting', async (req, res) => {
         }
 
         let allObjectIDs = [];
-        // ✨ 이 부분이 핵심 수정입니다: keywordGroups가 중첩 배열이므로,
-        // 각 내부 배열을 flatMap으로 펼쳐서 검색 키워드 문자열을 만듭니다.
-        // 또는 단순히 첫 번째 키워드 그룹만 사용하려면 paintingData.keywordGroups[0].join(',')으로 변경합니다.
-        // 여기서는 모든 키워드 그룹을 사용하도록 flatMap을 사용합니다.
-        const searchKeywordStrings = paintingData.keywordGroups.map(group => group.join(',')); // 각 그룹을 문자열로
+        const searchKeywordStrings = paintingData.keywordGroups.map(group => group.join(','));
         
-        for (const keywordString of searchKeywordStrings) { // 각 키워드 문자열에 대해 루프
+        for (const keywordString of searchKeywordStrings) {
             let searchUrl = `${MET_API_BASE_URL}/search?q=${encodeURIComponent(keywordString)}&hasImages=true`;
 
             for (let i = 0; i < MAX_SEARCH_RETRIES; i++) {
@@ -152,9 +161,10 @@ app.get('/api/painting', async (req, res) => {
                         break;
                     }
                 } catch (searchError) {
-                    console.warn(`[Search Error] Keyword group [${keywordString}] (Attempt ${i + 1}/${MAX_SEARCH_RETRIES}): ${searchError.message}`);
-                    if (searchError.response && searchError.response.status === 403) {
-                        console.error(`[Search Error] 403 Forbidden for search. Aborting retries for this keyword group.`);
+                    const status = searchError.response ? searchError.response.status : 'N/A';
+                    console.warn(`[Search Error] Keyword group [${keywordString}] (Attempt ${i + 1}/${MAX_SEARCH_RETRIES}, Status: ${status}): ${searchError.message}`);
+                    if (status === 403 || i === MAX_SEARCH_RETRIES - 1) { // 403은 재시도 무의미, 마지막 시도 실패 시
+                        console.error(`[Search Error] Aborting retries for search due to status ${status} or max retries.`);
                         break;
                     }
                     await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MULTIPLIER * (i + 1)));
@@ -166,7 +176,8 @@ app.get('/api/painting', async (req, res) => {
             return res.status(404).json({ error: `No objects found for the emoji keywords: ${emoji}` });
         }
 
-        const uniqueShuffledObjectIDs = shuffleArray([...new Set(allObjectIDs)]);
+        // 중복 제거 및 failedObjectIDs에 있는 ID 제거 후 셔플
+        const uniqueShuffledObjectIDs = shuffleArray([...new Set(allObjectIDs)].filter(id => !failedObjectIDs.has(id)));
 
         const newCacheEntry = { paintings: [], objectIDs: uniqueShuffledObjectIDs, processedIndex: 0, isFetching: false };
         cache.set(emoji, newCacheEntry);
