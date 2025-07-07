@@ -22,7 +22,9 @@ const RETRY_DELAY_MULTIPLIER = 2000; // 재시도 딜레이 증가량 (2초 * �
 const shuffleArray = (array) => { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } return array; };
 
 // 서버도 emojiPaintingMap 정보가 필요하므로 여기에 직접 정의합니다.
-// 이모지 키워드 그룹은 2차원 배열로 정의되어 있습니다. (이전 최종 작업 상태로 복원)
+// ✨ 중요: keywordGroups가 반드시 2차원 배열 형태인지 다시 한번 확인해주세요. ✨
+// 예시: [['portraits', 'landscapes']], ['single_keyword']]
+// 절대 ['single_keyword'] 또는 'single_keyword' 형태가 아니어야 합니다.
 const emojiPaintingMap = {
     '😌': { keywordGroups: [['portraits', 'landscapes', 'still life', 'serene']], title: '모나리자 - 레오나르도 다빈치' },
     '🤩': { keywordGroups: [['mythological', 'triumph', 'angels', 'cathedral', 'gold']], title: '아담의 창조 - 미켈란젤로' },
@@ -33,14 +35,27 @@ const emojiPaintingMap = {
     '🥰': { keywordGroups: [['love', 'couple', 'embrace', 'venus', 'mother and child']], title: '키스 - 구스타프 클림트' },
     '🥳': { keywordGroups: [['celebration', 'party', 'triumph', 'wedding', 'festival']], title: '라스 메니나스 - 디에고 벨라스케스' },
     '😴': { keywordGroups: [['night', 'landscapes', 'moon', 'dream', 'stillness']], title: '별이 빛나는 밤 - 빈센트 반 고흐' },
-    '🤯': { keywordGroups: ['abstract art', 'surrealism', 'cubism', 'geometry'], title: '절규 - 에드바르 뭉크' },
-    '😡': { keywordGroups: ['serene landscapes', 'still life with flowers', 'madonna and child', 'peace'], title: '1808년 5월 3일 - 프란시스코 고야' },
-    '🥶': { keywordGroups: ['warmth', 'comfort', 'light', 'fire', 'sun', 'summer'], title: '안개 바다 위의 방랑자 - 카스파르 다비트 프리드리히' },
+    '🤯': { keywordGroups: [['abstract art', 'surrealism', 'cubism', 'geometry']], title: '절규 - 에드바르 뭉크' },
+    '😡': { keywordGroups: [['serene landscapes', 'still life with flowers', 'madonna and child', 'peace']], title: '1808년 5월 3일 - 프란시스코 고야' },
+    '🥶': { keywordGroups: ['warmth', 'comfort', 'light', 'fire', 'sun', 'summer'], title: '안개 바다 위의 방랑자 - 카스파르 다비트 프리드리히' }, // 여기는 1차원 배열이네요!
     '🥺': { keywordGroups: ['hope', 'light', 'angels', 'saints', 'charity', 'sunrise'], title: '비너스의 탄생 - 산드로 보티첼리' },
     '🤔': { keywordGroups: ['sculpture', 'philosophy', 'manuscripts', 'maps', 'self-portraits'], title: '생각하는 사람 - 오귀스트 로댕' },
     '🤫': { keywordGroups: ['interiors', 'letters', 'window', 'symbols', 'allegory', 'secret'], title: '아메리칸 고딕 - 그랜트 우드' },
     '😭': { keywordGroups: ['hope', 'light', 'landscapes', 'sunrise', 'solace', 'healing'], title: '최후의 만찬 - 레오나르도 다빈치' }
 };
+
+// 🥶 이모지의 keywordGroups가 1차원 배열로 되어 있어 발생한 문제로 추정됩니다.
+// 모든 keywordGroups를 2차원 배열로 통일합니다.
+for (const emojiKey in emojiPaintingMap) {
+    if (emojiPaintingMap.hasOwnProperty(emojiKey)) {
+        const entry = emojiPaintingMap[emojiKey];
+        if (entry.keywordGroups && !Array.isArray(entry.keywordGroups[0])) {
+            // keywordGroups가 [['a','b']] 형태가 아니라 ['a','b'] 형태인 경우
+            entry.keywordGroups = [entry.keywordGroups];
+        }
+    }
+}
+
 
 const fetchPaintingsInBackground = async (emoji) => {
     const emojiCache = cache.get(emoji);
@@ -52,7 +67,6 @@ const fetchPaintingsInBackground = async (emoji) => {
         let newFoundPaintings = [];
         let currentIndex = emojiCache.processedIndex;
         
-        // 백그라운드에서 가져올 그림 수를 BATCH_SIZE (5개)로 최소화하여 부담 감소
         const targetFetchCount = BATCH_SIZE; 
         
         while (newFoundPaintings.length < targetFetchCount && currentIndex < emojiCache.objectIDs.length) {
@@ -67,7 +81,6 @@ const fetchPaintingsInBackground = async (emoji) => {
                     const detailUrl = `${MET_API_BASE_URL}/objects/${objectID}`;
                     const detailResponse = await axios.get(detailUrl, { timeout: 7000 });
 
-                    // primaryImage 또는 primaryImageSmall이 있는 경우만 유효한 작품으로 간주
                     if (detailResponse.data && (detailResponse.data.primaryImage || detailResponse.data.primaryImageSmall)) {
                         newFoundPaintings.push({
                             img_lq: detailResponse.data.primaryImageSmall,
@@ -79,7 +92,7 @@ const fetchPaintingsInBackground = async (emoji) => {
                         break;
                     } else {
                         console.warn(`[BG Detail Skip] Object ID ${objectID}: No primary image.`);
-                        failedObjectIDs.add(objectID); // 이미지가 없으면 기록하고 재시도하지 않음
+                        failedObjectIDs.add(objectID);
                         break;
                     }
                 } catch (e) {
@@ -87,7 +100,7 @@ const fetchPaintingsInBackground = async (emoji) => {
                     console.warn(`[BG Detail Error] Object ID ${objectID} (Attempt ${i + 1}/${MAX_DETAIL_RETRIES}, Status: ${status}): ${e.message}`);
                     if (status === 403 || status === 404 || i === MAX_DETAIL_RETRIES - 1) {
                          console.error(`[BG Detail Error] Aborting retries for ${objectID} due to status ${status} or max retries.`);
-                         failedObjectIDs.add(objectID); // 실패한 ID 기록
+                         failedObjectIDs.add(objectID);
                          break;
                     }
                     await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MULTIPLIER * (i + 1)));
@@ -131,29 +144,30 @@ app.get('/api/painting', async (req, res) => {
             }
         }
         if (emojiCache.processedIndex >= emojiCache.objectIDs.length && emojiCache.paintings.length === 0) {
-            // 모든 objectIDs를 처리했고, paintings 배열도 비어있다면
             return res.status(404).json({ error: 'All available objects for this emoji have been shown or could not be found.' }); 
         } else {
-            // 그림이 아직 준비 중이거나, 추가 페칭이 필요한 경우 (백그라운드에서 계속 시도 중)
             return res.status(202).json({ message: 'Fetching more objects in the background. Please try again shortly.' }); 
         }
     }
 
-    // 캐시에 없는 새로운 이모지 요청인 경우
     try {
         const paintingData = emojiPaintingMap[emoji];
-        if (!paintingData) {
-            console.error(`Invalid emoji: ${emoji}`);
-            return res.status(400).json({ error: 'Invalid emoji provided.' });
+        if (!paintingData || !paintingData.keywordGroups || !Array.isArray(paintingData.keywordGroups)) { // 추가 방어 로직
+            console.error(`Invalid or malformed emoji data for: ${emoji}`);
+            return res.status(400).json({ error: 'Invalid or malformed emoji data provided.' });
         }
 
         let allObjectIDs = [];
         const primaryKeywordGroups = paintingData.keywordGroups;
 
-        // 모든 키워드 그룹에 대해 검색 시도 (medium 필터 없이 더 느슨하게)
         for (const keywordsArray of primaryKeywordGroups) {
-            const keywordString = keywordsArray.join(','); // 올바른 join 호출
-            // ✨ medium 필터링을 제거하여 모든 유형의 작품을 검색하도록 합니다. ✨
+            // ✨ 중요: keywordsArray가 배열인지 다시 한번 확인합니다. (방어 로직 강화) ✨
+            if (!Array.isArray(keywordsArray)) {
+                console.warn(`[Data Warning] Expected keywordsArray to be an array, but received:`, keywordsArray);
+                continue; // 배열이 아니면 건너뜁니다.
+            }
+
+            const keywordString = keywordsArray.join(','); 
             let searchUrl = `${MET_API_BASE_URL}/search?q=${encodeURIComponent(keywordString)}&hasImages=true`; 
 
             for (let i = 0; i < MAX_SEARCH_RETRIES; i++) {
@@ -179,9 +193,6 @@ app.get('/api/painting', async (req, res) => {
             }
         }
         
-        // Fallback medium 검색 로직 제거 (더 느슨한 기본 검색으로 대체)
-        // if (allObjectIDs.length < BATCH_SIZE * 2 && searchAttempted) { ... }
-
         if (allObjectIDs.length === 0) {
             return res.status(404).json({ error: `No objects found for the emoji keywords after all attempts: ${emoji}` });
         }
